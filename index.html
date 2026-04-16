@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0f2027">
+    <title>V-Store Ultra Control Dashboard</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: #0f2027;
+            background: radial-gradient(circle at 0% 0%, #203a43 0%, transparent 50%),
+                        radial-gradient(circle at 100% 100%, #2c5364 0%, transparent 50%),
+                        radial-gradient(circle at 50% 50%, #0f2027 100%);
+            height: 100vh; color: white; overflow: hidden; display: flex; flex-direction: column;
+        }
+
+        /* Modals & Popups */
+        .full-modal {
+            position: fixed; inset: 0; background: rgba(15, 32, 39, 0.98);
+            backdrop-filter: blur(25px); z-index: 999; display: none;
+            flex-direction: column; justify-content: center; align-items: center; padding: 20px;
+        }
+        .modal-card {
+            background: rgba(255,255,255,0.05); border: 1.5px solid rgba(0,242,254,0.4);
+            padding: 25px; border-radius: 25px; width: 100%; max-width: 360px;
+            box-shadow: 0 0 30px rgba(0,242,254,0.2); text-align: center;
+        }
+
+        input {
+            width: 100%; padding: 12px; margin-bottom: 12px; border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: white; outline: none;
+        }
+        .btn { width: 100%; padding: 14px; border-radius: 15px; border: none; font-weight: 800; cursor: pointer; transition: 0.3s; }
+        .btn-blue { background: linear-gradient(45deg, #00f2fe, #4facfe); color: #0f2027; }
+        .btn-red { background: rgba(255, 75, 43, 0.1); color: #ff4b2b; border: 1px solid #ff4b2b; margin-top: 15px; }
+
+        /* App UI Header */
+        .header { padding: 50px 25px 15px; display: flex; justify-content: space-between; align-items: center; }
+        .user-info h2 { font-size: 26px; font-weight: 800; letter-spacing: -1px; cursor: pointer; color: #fff; }
+        .user-info p { font-size: 10px; color: #00f2fe; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; }
+
+        /* Main Container */
+        .container { flex: 1; padding: 10px 20px; overflow-y: auto; padding-bottom: 160px; }
+        
+        /* Permanent Glowing Link Cards */
+        .app-link {
+            background: rgba(0, 242, 254, 0.08); 
+            border: 1.5px solid rgba(0, 242, 254, 0.4); 
+            border-radius: 24px; padding: 16px; margin-bottom: 15px; 
+            display: flex; align-items: center;
+            text-decoration: none; color: white; backdrop-filter: blur(10px);
+            box-shadow: 0 5px 15px rgba(0, 242, 254, 0.1); transition: 0.2s;
+        }
+        .app-link:active { transform: scale(0.95); background: rgba(0, 242, 254, 0.15); }
+
+        .icon-box { 
+            width: 52px; height: 52px; border-radius: 16px; 
+            background: rgba(0, 242, 254, 0.1); border: 1px solid rgba(0, 242, 254, 0.3);
+            display: flex; justify-content: center; align-items: center; margin-right: 18px; 
+            font-size: 24px; overflow: hidden; box-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
+        }
+        .icon-box img { width: 100%; height: 100%; object-fit: cover; }
+        .app-info h4 { font-size: 17px; font-weight: 700; }
+
+        /* Permanent Disclaimer Box */
+        .disclaimer-box {
+            margin: 20px 0; padding: 12px;
+            background: rgba(255, 255, 255, 0.03); border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 10px; color: rgba(255, 255, 255, 0.3);
+            text-align: center; line-height: 1.5;
+        }
+
+        /* Bottom Notice Alert Bar */
+        .notice-bar {
+            position: fixed; bottom: 105px; left: 20px; right: 20px;
+            background: rgba(0, 242, 254, 0.1); border: 1px solid #00f2fe;
+            padding: 10px; border-radius: 15px; font-size: 11px;
+            color: #00f2fe; text-align: center; backdrop-filter: blur(10px);
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.3); z-index: 10;
+        }
+
+        /* Nav Bar with Permanent Triple Glow Icons */
+        .nav-bar { margin: 0 20px 25px; background: rgba(255,255,255,0.04); height: 75px; border-radius: 35px; display: flex; justify-content: space-around; align-items: center; border: 1px solid rgba(255,255,255,0.1); }
+        .nav-item { 
+            font-size: 26px; color: #00f2fe; 
+            text-shadow: 0 0 15px #00f2fe, 0 0 25px rgba(0, 242, 254, 0.6); 
+        }
+
+        /* Admin Dashboard Controls */
+        .admin-list { margin-top: 15px; max-height: 250px; overflow-y: auto; text-align: left; }
+        .admin-item { background: rgba(255,255,255,0.05); padding: 10px; border-radius: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; font-size: 12px; border: 1px solid rgba(255,255,255,0.1); }
+        .move-btn { background: #00f2fe; color: #000; border: none; padding: 4px 8px; border-radius: 6px; font-weight: bold; font-size: 10px; }
+    </style>
+</head>
+<body>
+
+    <div id="nameModal" class="full-modal">
+        <div class="modal-card">
+            <h2 style="color:#00f2fe; margin-bottom:15px;">Setup Profile</h2>
+            <input type="text" id="userNameInput" placeholder="Apna Naam Likhen...">
+            <button class="btn btn-blue" onclick="saveUserName()">VERIFY & START</button>
+        </div>
+    </div>
+
+    <div id="adminModal" class="full-modal">
+        <div class="modal-card" style="max-height: 95vh; overflow-y: auto;">
+            <h3 style="color:#00f2fe; margin-bottom:15px;">Admin Control</h3>
+            <input type="text" id="linkEmoji" placeholder="Emoji (e.g. 🚀)">
+            <input type="text" id="linkImg" placeholder="Image URL (ImgBB)">
+            <input type="text" id="linkTitle" placeholder="Service Title">
+            <input type="text" id="linkUrl" placeholder="Target URL (https://)">
+            <button class="btn btn-blue" id="submitBtn" onclick="addNewLink()">UPLOAD SERVICE</button>
+            
+            <input type="text" id="noticeInput" placeholder="System Notice Message..." style="margin-top:20px;">
+            <button class="btn btn-blue" style="background:#4facfe" onclick="updateNotice()">SET NOTICE</button>
+
+            <div id="adminLinkList" class="admin-list"></div>
+            <button class="btn btn-red" onclick="document.getElementById('adminModal').style.display='none'">EXIT ADMIN</button>
+        </div>
+    </div>
+
+    <header class="header">
+        <div class="user-info">
+            <p>V-Intelligence System</p>
+            <h2 id="displayDisplayName" onclick="openNameChange()">Vikash</h2>
+        </div>
+        <div onclick="openNameChange()" style="width:48px; height:48px; border-radius:15px; background:linear-gradient(45deg, #00f2fe, #4facfe); display:flex; justify-content:center; align-items:center; box-shadow: 0 0 15px rgba(0, 242, 254, 0.4); cursor:pointer;">👤</div>
+    </header>
+
+    <div class="container">
+        <div id="userLinkList"></div>
+        
+        <div class="disclaimer-box">
+    <b>अस्वीकरण:</b> यह डैशबोर्ड केवल शैक्षिक उपयोग के लिए है। सभी लिंक सुरक्षित क्लाउड डेटाबेस द्वारा प्रबंधित हैं। हम थर्ड-पार्टी सामग्री के स्वामी नहीं हैं। जिम्मेदारी से उपयोग करें। <br> <b>V-Intelligence © 2026</b>
+</div>
+
+    </div>
+
+    <div class="notice-bar" id="displayNotice">System ready...</div>
+
+    <nav class="nav-bar">
+        <div class="nav-item">🏠</div>
+        <div class="nav-item">🧑‍💻</div>
+        <div onclick="handleAdminTrigger()" class="nav-item" style="cursor:pointer;">⚙️</div>
+    </nav>
+
+    <script>
+        // Firebase Configuration (Vikash's Project)
+        const firebaseConfig = {
+            apiKey: "AIzaSyDR_7jysqTcWxMehNsHLLgcYj_3uQNj1ks",
+            authDomain: "vs-store-181d6.firebaseapp.com",
+            databaseURL: "https://vs-store-181d6-default-rtdb.firebaseio.com",
+            projectId: "vs-store-181d6",
+            storageBucket: "vs-store-181d6.firebasestorage.app",
+            messagingSenderId: "77073269493",
+            appId: "1:77073269493:web:e89f041dc184684c55bbbc"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        let currentEditId = null;
+
+        // Initialization
+        window.onload = function() {
+            const savedName = localStorage.getItem('v_user_name');
+            if (!savedName) document.getElementById('nameModal').style.display = 'flex';
+            else document.getElementById('displayDisplayName').innerText = savedName;
+            loadLinks();
+            listenNotice();
+        }
+
+        // Profile Name Logic
+        function saveUserName() {
+            const name = document.getElementById('userNameInput').value.trim();
+            if(name) { localStorage.setItem('v_user_name', name); location.reload(); }
+        }
+        function openNameChange() { document.getElementById('nameModal').style.display = 'flex'; }
+
+        // Secret Admin Trigger (5 Clicks)
+        let clicks = 0;
+        function handleAdminTrigger() {
+            clicks++;
+            if(clicks >= 5) {
+                if(prompt("Admin Access PIN:") === "493228") {
+                    document.getElementById('adminModal').style.display = 'flex';
+                    loadAdminLinks();
+                }
+                clicks = 0;
+            }
+            setTimeout(() => clicks = 0, 2500);
+        }
+
+        // Firebase Link Management
+        function addNewLink() {
+            const data = {
+                emoji: document.getElementById('linkEmoji').value || '🔗',
+                image: document.getElementById('linkImg').value.trim(),
+                title: document.getElementById('linkTitle').value,
+                url: document.getElementById('linkUrl').value,
+                order: Date.now()
+            };
+            if(currentEditId) {
+                db.ref('shared_links/' + currentEditId).update(data);
+                currentEditId = null;
+                document.getElementById('submitBtn').innerText = "UPLOAD SERVICE";
+            } else {
+                db.ref('shared_links/' + Date.now()).set(data);
+            }
+            clearInputs();
+        }
+
+        function loadLinks() {
+            db.ref('shared_links').orderByChild('order').on('value', snap => {
+                let html = '';
+                snap.forEach(child => {
+                    const item = child.val();
+                    let icon = item.image ? `<img src="${item.image}">` : item.emoji;
+                    html += `<div class="app-link" onclick="window.open('${item.url}','_blank')">
+                        <div class="icon-box">${icon}</div>
+                        <h4>${item.title}</h4>
+                    </div>`;
+                });
+                document.getElementById('userLinkList').innerHTML = html || '<p style="text-align:center; opacity:0.3;">Fetching data...</p>';
+            });
+        }
+
+        function loadAdminLinks() {
+            db.ref('shared_links').orderByChild('order').on('value', snap => {
+                let html = '';
+                snap.forEach(child => {
+                    const item = child.val();
+                    html += `<div class="admin-item">
+                        <span style="flex:1">${item.title}</span>
+                        <button class="move-btn" onclick="moveOrder('${child.key}', -5000)">↑</button>
+                        <button class="move-btn" onclick="moveOrder('${child.key}', 5000)">↓</button>
+                        <button class="move-btn" style="background:#4facfe" onclick="editLink('${child.key}')">EDIT</button>
+                        <button class="move-btn" style="background:#ff4b2b" onclick="deleteLink('${child.key}')">X</button>
+                    </div>`;
+                });
+                document.getElementById('adminLinkList').innerHTML = html;
+            });
+        }
+
+        function moveOrder(id, shift) {
+            db.ref('shared_links/' + id).once('value', s => {
+                let newOrder = s.val().order + shift;
+                db.ref('shared_links/' + id).update({ order: newOrder });
+            });
+        }
+
+        function editLink(id) {
+            db.ref('shared_links/' + id).once('value', s => {
+                const data = s.val();
+                document.getElementById('linkEmoji').value = data.emoji;
+                document.getElementById('linkImg').value = data.image || '';
+                document.getElementById('linkTitle').value = data.title;
+                document.getElementById('linkUrl').value = data.url;
+                currentEditId = id;
+                document.getElementById('submitBtn').innerText = "SAVE CHANGES";
+                window.scrollTo(0,0);
+            });
+        }
+
+        function deleteLink(id) { if(confirm("Confirm Delete?")) db.ref('shared_links/' + id).remove(); }
+        
+        // Notice System
+        function updateNotice() {
+            db.ref('settings/notice').set(document.getElementById('noticeInput').value);
+            document.getElementById('noticeInput').value = '';
+        }
+        function listenNotice() {
+            db.ref('settings/notice').on('value', s => {
+                document.getElementById('displayNotice').innerText = s.val() || "V-Store System Active";
+            });
+        }
+        function clearInputs() { document.querySelectorAll('#adminModal input').forEach(i => i.value = ''); }
+    </script>
+</body>
+</html>
