@@ -4,9 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#0f2027">
-    <title>V-Store | Smart Dashboard</title>
+    <title>V-Store | Secure Dashboard</title>
     
-    <!-- Firebase Realtime Database -->
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
 
@@ -21,7 +20,7 @@
         body {
             font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
             background: #0f2027;
-            background: radial-gradient(circle at 0% 0%, #203gg3 0%, transparent 50%),
+            background: radial-gradient(circle at 0% 0%, #203a43 0%, transparent 50%),
                         radial-gradient(circle at 100% 100%, #2c5364 0%, transparent 50%),
                         radial-gradient(circle at 50% 50%, #0f2027 100%);
             min-height: 100vh;
@@ -30,7 +29,7 @@
             flex-direction: column;
         }
 
-        /* Name Modal */
+        /* Modal Overlay */
         .full-modal {
             position: fixed;
             inset: 0;
@@ -245,7 +244,6 @@
             opacity: 0.8;
         }
 
-        /* Scrollbar */
         .container::-webkit-scrollbar {
             width: 4px;
         }
@@ -256,15 +254,32 @@
             background: #00f2fe;
             border-radius: 10px;
         }
+
+        .logout-text {
+            font-size: 12px;
+            margin-top: 8px;
+            cursor: pointer;
+            color: #ff8a7a;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
 
-    <!-- Name Setup Modal (only for username) -->
+    <!-- LOCK SCREEN MODAL -->
+    <div id="lockModal" class="full-modal">
+        <div class="modal-card">
+            <h2>🔒 Enter PIN</h2>
+            <input type="password" id="lockPassword" placeholder="Dashboard PIN" autocomplete="off">
+            <button class="btn btn-blue" onclick="verifyPassword()">UNLOCK</button>
+        </div>
+    </div>
+
+    <!-- NAME MODAL -->
     <div id="nameModal" class="full-modal">
         <div class="modal-card">
             <h2>👤 Setup Profile</h2>
-            <input type="text" id="userNameInput" placeholder="Apna naam likhen... (e.g. Vikash)" autocomplete="off">
+            <input type="text" id="userNameInput" placeholder="Apna naam likhen..." autocomplete="off">
             <button class="btn btn-blue" onclick="saveUserName()">START DASHBOARD</button>
         </div>
     </div>
@@ -277,7 +292,7 @@
         <div class="avatar" onclick="openNameChange()">👤</div>
     </header>
 
-    <div class="container" id="mainContainer">
+    <div class="container">
         <div id="userLinkList">
             <div style="text-align:center; padding:30px; opacity:0.6;">🚀 Loading services...</div>
         </div>
@@ -285,6 +300,7 @@
             <b>अस्वीकरण / Disclaimer:</b> यह प्लेटफॉर्म केवल शैक्षिक उद्देश्यों के लिए है। सभी लिंक क्लाउड डेटाबेस द्वारा प्रबंधित हैं। हम तीसरे पक्ष की सामग्री के स्वामी नहीं हैं। जिम्मेदारी से उपयोग करें।<br>
             <b>© V-Store Intelligence 2026</b>
         </div>
+        <div class="logout-text" onclick="logoutUser()">🚪 Logout (lock dashboard)</div>
     </div>
 
     <!-- Real-time Notice from Firebase (read-only) -->
@@ -300,7 +316,7 @@
 
     <script>
         // --------------------------------------------------------------
-        // FIREBASE CONFIGURATION (same as your project)
+        // FIREBASE CONFIGURATION
         // --------------------------------------------------------------
         const firebaseConfig = {
             apiKey: "AIzaSyDR_7jysqTcWxMehNsHLLgcYj_3uQNj1ks",
@@ -312,16 +328,101 @@
             appId: "1:77073269493:web:e89f041dc184684c55bbbc"
         };
 
-        // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
 
         // --------------------------------------------------------------
-        // 1. USER NAME HANDLING (localStorage + modal)
+        // GLOBAL VARIABLES
+        // --------------------------------------------------------------
+        let currentPasswordListener = null;
+        let isCurrentlyUnlocked = false;
+
+        // --------------------------------------------------------------
+        // STORED CREDENTIALS (localStorage)
+        // --------------------------------------------------------------
+        function getStoredPassword() {
+            return localStorage.getItem('v_user_password') || null;
+        }
+
+        function setStoredPassword(pwd) {
+            if (pwd) localStorage.setItem('v_user_password', pwd);
+            else localStorage.removeItem('v_user_password');
+        }
+
+        function clearStoredPassword() {
+            localStorage.removeItem('v_user_password');
+        }
+
+        // --------------------------------------------------------------
+        // LOCK / UNLOCK UI
+        // --------------------------------------------------------------
+        function lockDashboard() {
+            isCurrentlyUnlocked = false;
+            clearStoredPassword();
+            document.getElementById('lockModal').style.display = 'flex';
+        }
+
+        function unlockDashboard() {
+            isCurrentlyUnlocked = true;
+            document.getElementById('lockModal').style.display = 'none';
+            loadUserName();
+            loadServiceLinks();
+            loadSystemNotice();
+        }
+
+        // --------------------------------------------------------------
+        // VERIFY PASSWORD (called from lock screen)
+        // --------------------------------------------------------------
+        async function verifyPassword() {
+            const enteredPwd = document.getElementById('lockPassword').value;
+            if (!enteredPwd) {
+                alert("Enter PIN");
+                return;
+            }
+            const snapshot = await database.ref('settings/user_password').once('value');
+            const correctPwd = snapshot.val();
+            if (correctPwd && enteredPwd === correctPwd) {
+                setStoredPassword(enteredPwd);
+                unlockDashboard();
+                startPasswordChangeListener();
+            } else {
+                alert("❌ Wrong PIN! Access denied.");
+            }
+            document.getElementById('lockPassword').value = '';
+        }
+
+        // --------------------------------------------------------------
+        // REAL-TIME PASSWORD CHANGE DETECTION
+        // --------------------------------------------------------------
+        function startPasswordChangeListener() {
+            if (currentPasswordListener) currentPasswordListener.off();
+            const pwdRef = database.ref('settings/user_password');
+            currentPasswordListener = pwdRef.on('value', (snapshot) => {
+                const newPwd = snapshot.val();
+                const storedPwd = getStoredPassword();
+                if (isCurrentlyUnlocked && storedPwd && newPwd !== storedPwd) {
+                    alert("🔐 Dashboard password has been changed by admin. Please re-enter new PIN.");
+                    lockDashboard();
+                    if (currentPasswordListener) currentPasswordListener.off();
+                    currentPasswordListener = null;
+                }
+            });
+        }
+
+        // --------------------------------------------------------------
+        // LOGOUT (manual lock)
+        // --------------------------------------------------------------
+        function logoutUser() {
+            if (currentPasswordListener) currentPasswordListener.off();
+            currentPasswordListener = null;
+            lockDashboard();
+        }
+
+        // --------------------------------------------------------------
+        // USER NAME HANDLING
         // --------------------------------------------------------------
         function saveUserName() {
-            const nameInput = document.getElementById('userNameInput');
-            const name = nameInput.value.trim();
+            const name = document.getElementById('userNameInput').value.trim();
             if (name === "") {
                 alert("कृपया अपना नाम दर्ज करें / Please enter your name");
                 return;
@@ -336,7 +437,6 @@
             document.getElementById('userNameInput').value = '';
         }
 
-        // Load saved name on startup
         function loadUserName() {
             const saved = localStorage.getItem('v_user_name');
             if (saved && saved !== "") {
@@ -348,7 +448,7 @@
         }
 
         // --------------------------------------------------------------
-        // 2. FETCH & DISPLAY SERVICE LINKS (READ-ONLY)
+        // FETCH & DISPLAY SERVICE LINKS (READ-ONLY)
         // --------------------------------------------------------------
         function loadServiceLinks() {
             const linksRef = database.ref('shared_links').orderByChild('order');
@@ -365,14 +465,13 @@
                     const title = escapeHtml(link.title || 'Service');
                     const url = link.url || '#';
                     let iconHtml = '';
-                    
-                    // Priority: if image URL exists -> show image, else show emoji
+
                     if (link.image && link.image.trim() !== "") {
                         iconHtml = `<img src="${link.image}" alt="icon" loading="lazy">`;
                     } else {
                         iconHtml = link.emoji || '🔗';
                     }
-                    
+
                     html += `
                         <div class="app-link" onclick="window.open('${escapeUrl(url)}', '_blank')">
                             <div class="icon-box">${iconHtml}</div>
@@ -387,28 +486,8 @@
             });
         }
 
-        // Helper: escape HTML to avoid injection
-        function escapeHtml(str) {
-            if (!str) return '';
-            return str.replace(/[&<>]/g, function(m) {
-                if (m === '&') return '&amp;';
-                if (m === '<') return '&lt;';
-                if (m === '>') return '&gt;';
-                return m;
-            }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
-                return c;
-            });
-        }
-
-        function escapeUrl(url) {
-            // simple validation, return safely
-            if (!url) return '#';
-            if (url.startsWith('http://') || url.startsWith('https://')) return url;
-            return '#';
-        }
-
         // --------------------------------------------------------------
-        // 3. LIVE NOTICE (READ-ONLY) FROM Firebase
+        // LIVE NOTICE (READ-ONLY)
         // --------------------------------------------------------------
         function loadSystemNotice() {
             const noticeRef = database.ref('settings/notice');
@@ -426,16 +505,46 @@
         }
 
         // --------------------------------------------------------------
-        // 4. INITIALIZE EVERYTHING
+        // HELPER FUNCTIONS
         // --------------------------------------------------------------
-        function init() {
-            loadUserName();        // Show name modal if needed
-            loadServiceLinks();    // Real-time service cards
-            loadSystemNotice();    // Real-time bottom notice
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
+                return c;
+            });
         }
 
-        // Start the app
-        init();
+        function escapeUrl(url) {
+            if (!url) return '#';
+            if (url.startsWith('http://') || url.startsWith('https://')) return url;
+            return '#';
+        }
+
+        // --------------------------------------------------------------
+        // INITIALIZATION – Check stored password vs Firebase
+        // --------------------------------------------------------------
+        async function checkInitialAccess() {
+            const storedPwd = getStoredPassword();
+            if (!storedPwd) {
+                lockDashboard();
+                return;
+            }
+            const snapshot = await database.ref('settings/user_password').once('value');
+            const currentPwd = snapshot.val();
+            if (currentPwd && storedPwd === currentPwd) {
+                unlockDashboard();
+                startPasswordChangeListener();
+            } else {
+                lockDashboard();
+            }
+        }
+
+        checkInitialAccess();
     </script>
 </body>
 </html>
