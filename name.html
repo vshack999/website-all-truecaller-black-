@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VIKASH SAHU | SECURE TERMINAL</title>
+    <style>
+        :root { --primary: #00f2fe; --secondary: #4facfe; --bg: #0f2027; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: var(--bg); font-family: 'Segoe UI', sans-serif; overflow: hidden; height: 100vh; color: #fff; }
+
+        /* --- LOGIN SCREEN --- */
+        #passOverlay {
+            position: fixed; inset: 0; background: radial-gradient(circle, #203a43, #0f2027);
+            z-index: 10000; display: flex; align-items: center; justify-content: center;
+        }
+        .login-card {
+            background: rgba(0,0,0,0.8); padding: 40px; border: 2px solid var(--primary);
+            border-radius: 20px; text-align: center; box-shadow: 0 0 30px var(--primary); width: 90%; max-width: 350px;
+        }
+
+        /* --- ADMIN PANEL --- */
+        #adminPanel {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95);
+            z-index: 11000; align-items: center; justify-content: center;
+        }
+        .admin-box {
+            background: #111; padding: 30px; border: 2px solid #ff0055; border-radius: 15px; width: 320px;
+            box-shadow: 0 0 20px #ff0055;
+        }
+
+        input { width: 100%; padding: 12px; margin: 10px 0; background: #000; border: 1px solid var(--secondary); color: #fff; border-radius: 8px; text-align: center; font-size: 16px; }
+        button { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; text-transform: uppercase; }
+        .btn-cyan { background: var(--primary); color: #000; }
+        .btn-red { background: #ff0055; color: #fff; margin-top: 10px; }
+
+        /* --- MAIN UI --- */
+        #mainContent { display: none; }
+        .header { height: 110px; background: #000; border-bottom: 4px solid var(--primary); display: flex; flex-direction: column; align-items: center; justify-content: center; position: fixed; top: 0; width: 100%; z-index: 1000; }
+        .header h1 { font-size: 36px; letter-spacing: 10px; color: var(--primary); text-shadow: 0 0 15px var(--primary); font-weight: 900; }
+        
+        .viewport { position: absolute; top: 110px; bottom: 60px; width: 100%; overflow-y: auto; background: #fff; }
+        iframe { width: 100%; height: 2200px; border: none; position: absolute; top: -340px; left: 0; }
+        .top-mask { height: 105px; top: 0; position: sticky; background: #fff; z-index: 10; width: 100%; }
+        .bottom-mask { height: 1500px; top: 1180px; position: absolute; background: #fff; z-index: 10; width: 100%; }
+        .footer { height: 60px; background: #000; border-top: 2px solid var(--primary); position: fixed; bottom: 0; width: 100%; z-index: 1000; display: flex; align-items: center; justify-content: space-around; font-size: 12px; font-family: monospace; }
+    </style>
+</head>
+<body>
+
+    <div id="passOverlay">
+        <div class="login-card">
+            <h2 style="color:var(--primary); letter-spacing: 2px;">SYSTEM LOCKED</h2>
+            <input type="password" id="inputPass" placeholder="Enter Terminal Password...">
+            <button class="btn-cyan" onclick="login()">Unlock Access</button>
+            <p id="err" style="color:red; font-size:12px; margin-top:10px; display:none;">Invalid Credentials!</p>
+        </div>
+    </div>
+
+    <div id="adminPanel">
+        <div class="admin-box">
+            <h3 style="color:#ff0055; margin-bottom:15px; text-align:center; letter-spacing: 2px;">MASTER CONTROL</h3>
+            <div id="pinArea">
+                <label style="font-size:10px; color:#aaa;">ENTER ADMIN PIN</label>
+                <input type="password" id="adminPinInput" placeholder="******">
+                <button class="btn-red" onclick="verifyAdminPin()">Verify PIN</button>
+            </div>
+            <div id="controlArea" style="display:none;">
+                <label style="font-size:10px; color:#aaa;">NEW APP PASSWORD</label>
+                <input type="text" id="newPassVal">
+                <button class="btn-cyan" onclick="saveNewPass()">Update & Logout All</button>
+            </div>
+            <button style="background:#333; color:#fff; margin-top:10px;" onclick="closeAdmin()">Close</button>
+        </div>
+    </div>
+
+    <div id="mainContent">
+        <div class="header" onclick="checkAdminTrigger()">
+            <h1>VIKASH SAHU</h1>
+            <p style="font-size:9px; color:rgba(255,255,255,0.3); letter-spacing: 4px;">SECURE NODE ALPHA-7</p>
+        </div>
+        <div class="viewport">
+            <div class="top-mask"></div>
+            <iframe src="https://goutamhx.github.io/TrueCallCheck-Web/"></iframe>
+            <div class="bottom-mask"></div>
+        </div>
+        <div class="footer">
+            <span style="color:var(--primary); font-weight: bold;">● ONLINE_DATA</span>
+            <span id="clock"></span>
+            <span>𝗗𝗘𝗩: 𝐯𝐢𝐤𝐚𝐬𝐡 𝐛𝐡𝐚𝐢</span>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, onValue, set, get } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDR_7jysqTcWxMehNsHLLgcYj_3uQNj1ks",
+            authDomain: "vs-store-181d6.firebaseapp.com",
+            databaseURL: "https://vs-store-181d6-default-rtdb.firebaseio.com",
+            projectId: "vs-store-181d6",
+            storageBucket: "vs-store-181d6.firebasestorage.app",
+            messagingSenderId: "77073269493",
+            appId: "1:77073269493:web:e89f041dc184684c55bbbc"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        let currentPass = "";
+        const ADMIN_PIN = "493228";
+
+        // Firebase Sync
+        onValue(ref(db, 'admin_settings/app_password'), (snap) => {
+            const newPass = snap.val();
+            if (newPass) {
+                currentPass = newPass;
+                // Auto logout only if password truly changed and user was logged in
+                const savedToken = localStorage.getItem("v_pass_token");
+                if (savedToken && savedToken !== currentPass) {
+                    localStorage.clear();
+                    location.reload();
+                }
+            }
+        });
+
+        window.login = function() {
+            const passInput = document.getElementById('inputPass').value;
+            if (passInput === currentPass) {
+                localStorage.setItem("v_auth", "true");
+                localStorage.setItem("v_pass_token", currentPass);
+                showApp();
+            } else {
+                document.getElementById('err').style.display = 'block';
+            }
+        };
+
+        function showApp() {
+            document.getElementById('passOverlay').style.display = 'none';
+            document.getElementById('mainContent').style.display = 'block';
+        }
+
+        // --- FIXED PERSISTENT LOGIN ---
+        // Page load par check karega ki token hai ya nahi
+        if (localStorage.getItem("v_auth") === "true") {
+            showApp();
+        }
+
+        window.verifyAdminPin = function() {
+            if (document.getElementById('adminPinInput').value === ADMIN_PIN) {
+                document.getElementById('pinArea').style.display = 'none';
+                document.getElementById('controlArea').style.display = 'block';
+                document.getElementById('newPassVal').value = currentPass;
+            } else { alert("Wrong PIN!"); }
+        };
+
+        window.saveNewPass = function() {
+            const nPass = document.getElementById('newPassVal').value;
+            if (nPass) {
+                set(ref(db, 'admin_settings/app_password'), nPass).then(() => {
+                    alert("Updated! Logging out all users...");
+                    closeAdmin();
+                });
+            }
+        };
+
+        let clicks = 0;
+        window.checkAdminTrigger = function() {
+            clicks++;
+            if (clicks >= 5) { document.getElementById('adminPanel').style.display = 'flex'; clicks = 0; }
+        };
+
+        window.closeAdmin = function() {
+            document.getElementById('adminPanel').style.display = 'none';
+            document.getElementById('pinArea').style.display = 'block';
+            document.getElementById('controlArea').style.display = 'none';
+        };
+
+        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString(); }, 1000);
+    </script>
+</body>
+</html>
